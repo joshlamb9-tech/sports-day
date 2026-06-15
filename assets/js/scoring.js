@@ -93,7 +93,8 @@
 
       // For measured field events, derive positions by ranking best marks (desc); ties share a place.
       const posById = {}, bestById = {};
-      let awardRows;
+      let explainAll = [];
+
       if (isMarks) {
         const ranked = er.map(function (r) { return { r: r, best: bestMark(r.attempts) }; })
           .filter(function (x) { return x.best != null; })
@@ -103,19 +104,27 @@
           if (prev === null || x.best !== prev) { pos = i + 1; prev = x.best; }
           posById[x.r.id] = pos; bestById[x.r.id] = x.best;
         });
-        awardRows = ranked.map(function (x) { return { id: x.r.id, position: posById[x.r.id], house_id: x.r.house_id }; });
+        const awardRows = ranked.map(function (x) { return { id: x.r.id, position: posById[x.r.id], house_id: x.r.house_id }; });
+        const res = awardEventPoints(evScheme, tiePolicy, awardRows);
+        Object.keys(res.points).forEach(function (id) { pointsByResult[id] = res.points[id]; });
+        explainAll = res.explain;
       } else {
-        awardRows = er;
+        // races: award each heat independently, then sum per house
+        const byHeat = {};
+        er.forEach(function (r) { const hk = r.heat || 'A'; (byHeat[hk] = byHeat[hk] || []).push(r); });
+        Object.keys(byHeat).sort().forEach(function (hk) {
+          const res = awardEventPoints(evScheme, tiePolicy, byHeat[hk]);
+          Object.keys(res.points).forEach(function (id) { pointsByResult[id] = res.points[id]; });
+          res.explain.forEach(function (e) { e.heat = hk; explainAll.push(e); });
+        });
       }
-
-      const res = awardEventPoints(evScheme, tiePolicy, awardRows);
-      Object.keys(res.points).forEach(function (id) { pointsByResult[id] = res.points[id]; });
 
       const placings = er.slice().map(function (r) {
         const h = houseById[r.house_id] || {};
         const position = isMarks ? (posById[r.id] != null ? posById[r.id] : null) : num(r.position);
         return {
-          resultId: r.id, position: position, houseId: r.house_id || null,
+          resultId: r.id, position: position, heat: isMarks ? null : (r.heat || 'A'),
+          houseId: r.house_id || null,
           houseName: r.house_id ? h.name : null, houseColour: r.house_id ? h.colour : null,
           athlete: r.athlete_name || null,
           mark: isMarks && bestById[r.id] != null ? bestById[r.id] : null,
@@ -123,9 +132,14 @@
           points: pointsByResult[r.id] || 0
         };
       }).sort(function (a, b) {
+        if (!isMarks && a.heat !== b.heat) return a.heat < b.heat ? -1 : 1;
         const pa = a.position == null ? 9999 : a.position, pb = b.position == null ? 9999 : b.position;
         return pa - pb;
       });
+
+      const heatSet = {};
+      if (!isMarks) er.forEach(function (r) { heatSet[r.heat || 'A'] = 1; });
+      const heats = Object.keys(heatSet).sort();
 
       eventBreakdown.push({
         eventId: ev.id, name: ev.name, discipline: ev.discipline, entryMode: ev.entry_mode || 'places',
@@ -133,7 +147,8 @@
         category: ev.category, isRelay: ev.is_relay, status: ev.status,
         customScheme: evScheme !== scheme ? evScheme : null,
         recorded: er.length > 0, tbcCount: er.filter(function (r) { return !r.house_id; }).length,
-        placings: placings, explain: res.explain
+        heated: heats.length > 1, heats: heats,
+        placings: placings, explain: explainAll
       });
     });
 

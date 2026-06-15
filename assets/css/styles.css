@@ -382,6 +382,15 @@ h3 { font-size: 1.15rem; font-weight: 700; }
 .preview-empty { padding: var(--s3); }
 .rc-actions { margin-top: var(--s4); gap: var(--s3); }
 
+/* Heats (track events) */
+.heat-bar { display: flex; flex-wrap: wrap; gap: var(--s2); margin: var(--s2) 0 var(--s3); }
+.heat-pill { display: inline-flex; align-items: center; padding: 8px var(--s4); border-radius: var(--pill); font-weight: 700; border: 1.5px solid var(--line); background: var(--card); color: var(--ink-soft); min-height: 40px; }
+.heat-pill.active { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.heat-pill.heat-add { border-style: dashed; color: var(--primary-press); }
+.heat-tick { color: var(--ok); font-weight: 800; }
+.heat-pill.active .heat-tick { color: #8ef0b0; }
+.heat-head { font-weight: 800; font-size: .78rem; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-faint); margin-top: var(--s2); padding-top: var(--s2); border-top: 1px dashed var(--line); }
+
 /* Field-event entrant list (measured events) */
 .entrant-list { display: grid; gap: var(--s3); }
 .entrant-row { border: 1.5px solid var(--line); border-radius: var(--r); padding: var(--s3); background: var(--card); }

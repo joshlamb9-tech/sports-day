@@ -124,8 +124,10 @@
   // a server/data error (4xx) marks the op failed but does not block the rest of the queue.
   async function runOp(op) {
     if (op.kind === 'replaceEventResults') {
-      // 1) clear any existing results for this event, 2) insert the recorded order.
-      await api.del('sportsday_results', { event_id: 'eq.' + op.eventId });
+      // 1) clear existing results for this event (scoped to the heat if given), 2) insert the recorded order.
+      const filter = { event_id: 'eq.' + op.eventId };
+      if (op.heat != null) filter.heat = 'eq.' + op.heat;
+      await api.del('sportsday_results', filter);
       if (op.rows && op.rows.length) {
         await api.insert('sportsday_results', op.rows, { prefer: 'return=minimal' });
       }

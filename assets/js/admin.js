@@ -237,9 +237,9 @@
           : el('span.chip', { text: 'not recorded' })
       ]);
       const rows = el('div.ev-results');
-      ev.placings.forEach(function (p) {
+      function placingRow(p) {
         const posTxt = p.position != null ? (medal(p.position) + ordinal(p.position)) : '—';
-        rows.appendChild(el('div.ev-result-row' + (isField ? '.is-field' : ''), null, [
+        return el('div.ev-result-row' + (isField ? '.is-field' : ''), null, [
           el('span.err-pos', { text: posTxt }),
           p.houseId ? el('span.swatch', { style: { background: p.houseColour } }) : el('span.chip.tbc-chip', { text: 'TBC' }),
           el('span.err-house', { text: p.houseName || (p.athlete ? '' : '—') }),
@@ -247,8 +247,16 @@
           isField ? el('span.err-mark.numeral', { text: p.mark != null ? fmtNum(p.mark) : '·' }) : null,
           el('span.err-pts.numeral', { text: fmtNum(p.points) }),
           el('button.btn.btn-ghost.btn-icon.no-print', { text: '✕', title: 'Void this entry', onclick: function () { voidResult(p.resultId); } })
-        ]));
-      });
+        ]);
+      }
+      if (ev.heated) {
+        ev.heats.forEach(function (hk) {
+          rows.appendChild(el('div.heat-head', { text: 'Heat ' + hk }));
+          ev.placings.filter(function (p) { return p.heat === hk; }).forEach(function (p) { rows.appendChild(placingRow(p)); });
+        });
+      } else {
+        ev.placings.forEach(function (p) { rows.appendChild(placingRow(p)); });
+      }
       body.appendChild(el('div.ev-block', null, [head, ev.recorded ? rows : el('p.muted.ev-empty', { text: 'Awaiting result.' })]));
     });
     body.appendChild(el('p.help.no-print', { text: 'Field events rank by best mark automatically. To re-enter a race, void it here then record it again.' }));

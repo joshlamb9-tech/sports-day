@@ -158,16 +158,23 @@
 
   function eventCard(ev) {
     const isMarks = (ev.entry_mode || 'places') === 'marks';
-    const count = (bundle.results || []).filter(function (r) { return r.event_id === ev.id && !r.voided; }).length;
-    const done = !isMarks && ev.status === 'done';
+    const isTrackEv = !isMarks && (ev.discipline || 'track') === 'track';
+    const rs = (bundle.results || []).filter(function (r) { return r.event_id === ev.id && !r.voided; });
+    const count = rs.length;
+    const heatsRec = isTrackEv ? Object.keys(rs.reduce(function (m, r) { m[r.heat || 'A'] = 1; return m; }, {})).length : 0;
+    const done = !isMarks && !isTrackEv && ev.status === 'done';
     const cat = ev.category && ev.category !== 'mixed' ? ev.category : '';
+    let statusChip = null;
+    if (isMarks) statusChip = count ? el('span.chip.done-chip', { text: '👤 ' + count }) : el('span.chip', { text: 'measured' });
+    else if (isTrackEv) statusChip = heatsRec ? el('span.chip.done-chip', { text: '🏁 ' + heatsRec + ' heat' + (heatsRec > 1 ? 's' : '') }) : null;
+    else statusChip = done ? el('span.chip.done-chip', { text: '✓ recorded' }) : null;
     return el('button.event-card' + (done ? '.done' : ''), { onclick: function () { openRecord(ev); } }, [
       el('span.ev-disc', { text: disciplineIcon(ev.discipline) }),
       el('span.ev-name', { text: ev.name || '(unnamed)' }),
       el('div.row.wrap-x', { style: { gap: '6px' } }, [
         groupMode === 'type' && ev.age_group_id ? el('span.chip', { text: ageLabel(ev.age_group_id) }) : null,
         cat ? el('span.chip', { text: cat }) : null,
-        isMarks ? (count ? el('span.chip.done-chip', { text: '👤 ' + count }) : el('span.chip', { text: 'measured' })) : (done ? el('span.chip.done-chip', { text: '✓ recorded' }) : null)
+        statusChip
       ])
     ]);
   }
@@ -184,20 +191,35 @@
   /* ---------- record card ---------- */
   function openRecord(ev) {
     if ((ev.entry_mode || 'places') === 'marks') { return openField(ev); }
-    // preload existing recorded order (for re-recording / correcting)
-    const existing = (bundle.results || []).filter(function (r) { return r.event_id === ev.id && !r.voided; })
-      .sort(function (a, b) { return a.position - b.position; });
-    const order = [], names = {};
-    let prevPos = null;
-    existing.forEach(function (r) { order.push({ house_id: r.house_id, tie: r.position === prevPos }); if (r.athlete_name) names[r.house_id] = r.athlete_name; prevPos = r.position; });
-    current = { event: ev, order: order, names: names, tieNext: false };
+    const heatsPresent = raceHeats(ev);
+    current = { event: ev, order: [], tieNext: false, dirty: false, heatsSeen: heatsPresent.length ? heatsPresent : ['A'], heat: heatsPresent[0] || 'A' };
+    loadHeat(current.heat);
     renderCard();
+  }
+  function isTrack() { return (current.event.discipline || 'track') === 'track'; }
+  function raceHeats(ev) {
+    const set = {};
+    (bundle.results || []).forEach(function (r) { if (r.event_id === ev.id && !r.voided) set[r.heat || 'A'] = 1; });
+    return Object.keys(set).sort();
+  }
+  function heatHasData(heat) {
+    return (bundle.results || []).some(function (r) { return r.event_id === current.event.id && (r.heat || 'A') === heat && !r.voided; });
+  }
+  function loadHeat(heat) {
+    current.heat = heat;
+    const ev = current.event;
+    const existing = (bundle.results || []).filter(function (r) { return r.event_id === ev.id && (r.heat || 'A') === heat && !r.voided; })
+      .sort(function (a, b) { return a.position - b.position; });
+    const order = []; let prevPos = null;
+    existing.forEach(function (r) { order.push({ house_id: r.house_id, tie: r.position === prevPos, name: r.athlete_name || '' }); prevPos = r.position; });
+    current.order = order; current.tieNext = false; current.dirty = false;
   }
 
   function renderCard() {
     clear(container);
     const ev = current.event;
     const positions = derivePositions(current.order);
+    const track = isTrack();
     const wrap = el('div.wrap.record', null, [
       el('div.row.between.rec-head', null, [
         el('button.btn.btn-ghost', { text: '‹ Events', onclick: renderPicker }),
@@ -208,13 +230,14 @@
           el('h2', { text: ev.name }),
           el('p.muted', { text: [ageLabel(ev.age_group_id), ev.category !== 'mixed' ? ev.category : '', ev.is_relay ? 'relay' : ''].filter(Boolean).join(' · ') })
         ]),
-        el('p.help', { text: 'Tap houses in finishing order. Tap a chosen house again to remove it.' }),
+        track ? heatBar() : null,
+        el('p.help', { text: track ? ('Heat ' + current.heat + ' — tap houses in finishing order (a house can place more than once). Save each heat; points are summed across heats.') : 'Tap houses in finishing order. Remove a place with ✕ in the list below.' }),
         houseTiles(positions),
         tieToggle(),
         orderPreview(positions),
         el('div.row.rc-actions', null, [
-          el('button.btn.btn-ghost', { text: 'Clear', onclick: function () { current.order = []; current.names = {}; renderCard(); } }),
-          el('button.btn.btn-primary.btn-lg.spread', { text: 'Save result', onclick: saveResult, disabled: current.order.length ? null : 'disabled' })
+          el('button.btn.btn-ghost', { text: 'Clear', onclick: function () { current.order = []; current.dirty = true; renderCard(); } }),
+          el('button.btn.btn-primary.btn-lg.spread', { text: track ? ('Save Heat ' + current.heat) : 'Save result', onclick: saveRaceHeat, disabled: current.order.length ? null : 'disabled' })
         ])
       ])
     ]);
@@ -222,16 +245,38 @@
     updateChip();
   }
 
+  function heatBar() {
+    const bar = el('div.heat-bar');
+    current.heatsSeen.forEach(function (h) {
+      bar.appendChild(el('button.heat-pill' + (h === current.heat ? '.active' : ''), { onclick: function () { switchHeat(h); } },
+        [el('span', { text: 'Heat ' + h }), heatHasData(h) ? el('span.heat-tick', { text: ' ✓' }) : null]));
+    });
+    bar.appendChild(el('button.heat-pill.heat-add', { text: '+ heat', onclick: addHeat }));
+    return bar;
+  }
+  function switchHeat(h) {
+    if (h === current.heat) return;
+    if (current.dirty && current.order.length) persistHeat();
+    loadHeat(h); renderCard();
+  }
+  function addHeat() {
+    let i = 0, letter;
+    do { letter = String.fromCharCode(65 + i); i++; } while (current.heatsSeen.indexOf(letter) !== -1);
+    if (current.dirty && current.order.length) persistHeat();
+    current.heatsSeen.push(letter); current.heatsSeen.sort();
+    loadHeat(letter); renderCard();
+  }
+
   function houseTiles(positions) {
     const grid = el('div.house-tiles');
     bundle.houses.forEach(function (h) {
-      const pos = positions[h.id];
-      const tile = el('button.house-tile' + (pos ? '.picked' : ''), {
-        style: { '--house': h.colour }, onclick: function () { toggleHouse(h.id); }
+      const count = current.order.filter(function (o) { return o.house_id === h.id; }).length;
+      const tile = el('button.house-tile' + (count ? '.picked' : ''), {
+        style: { '--house': h.colour }, onclick: function () { addPlacing(h.id); }
       }, [
         el('span.tile-swatch', { style: { background: h.colour } }),
         el('span.tile-name', { text: h.name }),
-        pos ? el('span.tile-pos', { text: medal(pos) + ordinal(pos) }) : null
+        count ? el('span.tile-pos', { text: count > 1 ? ('×' + count) : (medal(positions[h.id]) + ordinal(positions[h.id])) }) : null
       ]);
       grid.appendChild(tile);
     });
@@ -248,7 +293,6 @@
     if (!current.order.length) return el('p.muted.preview-empty', { text: 'No places yet.' });
     const scheme = (current.event.points_scheme && Object.keys(current.event.points_scheme).length) ? current.event.points_scheme : bundle.meet.points_scheme;
     const tie = bundle.meet.tie_policy;
-    // build pseudo results to award points
     const pseudo = current.order.map(function (o, i) { return { id: i, position: posOf(current.order, i), house_id: o.house_id }; });
     const award = scoring.awardEventPoints(scheme, tie, pseudo);
     const list = el('div.order-preview');
@@ -258,50 +302,57 @@
         el('span.pv-pos', { text: medal(pos) + ordinal(pos) }),
         el('span.pv-swatch', { style: { background: h.colour } }),
         el('span.pv-name', { text: h.name }),
-        bundle.meet.track_individual ? el('input.input.pv-name-input', { placeholder: 'pupil (optional)', value: current.names[o.house_id] || '', oninput: function (e) { current.names[o.house_id] = e.target.value; } }) : null,
-        el('span.pv-pts', { text: window.SD.ui.fmtNum(pts) + ' pt' + (pts === 1 ? '' : 's') })
+        bundle.meet.track_individual ? el('input.input.pv-name-input', { placeholder: 'pupil (optional)', value: o.name || '', oninput: function (e) { o.name = e.target.value; current.dirty = true; } }) : null,
+        el('span.pv-pts', { text: window.SD.ui.fmtNum(pts) + ' pt' + (pts === 1 ? '' : 's') }),
+        el('button.btn.btn-ghost.btn-icon', { text: '✕', title: 'Remove place', onclick: function () { removePlacing(i); } })
       ]));
     });
     return list;
   }
 
-  function toggleHouse(houseId) {
-    const idx = current.order.map(function (o) { return o.house_id; }).indexOf(houseId);
-    if (idx !== -1) { current.order.splice(idx, 1); }
-    else { current.order.push({ house_id: houseId, tie: !!current.tieNext && current.order.length > 0 }); current.tieNext = false; }
+  function addPlacing(houseId) {
+    current.order.push({ house_id: houseId, tie: !!current.tieNext && current.order.length > 0, name: '' });
+    current.tieNext = false; current.dirty = true;
     renderCard();
   }
+  function removePlacing(i) { current.order.splice(i, 1); current.dirty = true; renderCard(); }
 
-  // derive position number per house from order (handles ties)
+  // derive a representative position per house from the order (handles ties + repeats)
   function derivePositions(order) {
     const out = {}; let pos = 0;
-    order.forEach(function (o, i) { pos = (o.tie && i > 0) ? pos : pos + 1; out[o.house_id] = pos; });
+    order.forEach(function (o, i) { pos = (o.tie && i > 0) ? pos : pos + 1; if (out[o.house_id] == null) out[o.house_id] = pos; });
     return out;
   }
   function posOf(order, i) { let pos = 0; for (let k = 0; k <= i; k++) { pos = (order[k].tie && k > 0) ? pos : pos + 1; } return pos; }
 
-  async function saveResult() {
-    if (bundle.meet.status !== 'live') { toast(bundle.meet.status === 'finished' ? 'Meet is finished — locked' : 'Meet isn’t live yet', 'error'); return; }
-    if (!current.order.length) return;
+  function persistHeat() {
     const ev = current.event;
     const recordedBy = store.recorder() || null;
+    const heat = current.heat;
     const rows = current.order.map(function (o, i) {
       return {
-        meet_id: meetId, event_id: ev.id, position: posOf(current.order, i),
-        house_id: o.house_id, athlete_name: (current.names[o.house_id] || '').trim() || null,
+        meet_id: meetId, event_id: ev.id, heat: heat, position: posOf(current.order, i),
+        house_id: o.house_id, athlete_name: (o.name || '').trim() || null,
         recorded_by: recordedBy, client_uuid: api.uuid()
       };
     });
-    // enqueue (offline-safe); optimistic local update
-    queue.enqueue({ kind: 'replaceEventResults', eventId: ev.id, meetId: meetId, rows: rows, recordedBy: recordedBy });
-    // optimistic: mark done in local bundle + replace local results for this event
+    queue.enqueue({ kind: 'replaceEventResults', eventId: ev.id, heat: heat, meetId: meetId, rows: rows, recordedBy: recordedBy });
     ev.status = 'done';
-    bundle.results = (bundle.results || []).filter(function (r) { return r.event_id !== ev.id; }).concat(rows.map(function (r) { return Object.assign({ voided: false, created_at: new Date().toISOString() }, r); }));
+    const stamped = rows.map(function (r) { return Object.assign({ voided: false, created_at: new Date().toISOString() }, r); });
+    bundle.results = (bundle.results || []).filter(function (r) { return !(r.event_id === ev.id && (r.heat || 'A') === heat && !r.voided); }).concat(stamped);
+    current.dirty = false;
     rememberRecent(ev);
+  }
+
+  async function saveRaceHeat() {
+    if (bundle.meet.status !== 'live') { toast(bundle.meet.status === 'finished' ? 'Meet is finished — locked' : 'Meet isn’t live yet', 'error'); return; }
+    if (!current.order.length) return;
+    const ev = current.event, track = isTrack();
+    persistHeat();
     if (window.confetti) { try { confetti({ particleCount: 50, spread: 60, origin: { y: 0.8 }, disableForReducedMotion: true }); } catch (e) {} }
-    toast('Saved ✓ ' + ev.name);
-    renderPicker();
-    if (window.SD.live) window.SD.live.refresh && window.SD.live.refresh();
+    if (window.SD.live && window.SD.live.refresh) window.SD.live.refresh();
+    if (track) { toast('Heat ' + current.heat + ' saved ✓'); renderCard(); }
+    else { toast('Saved ✓ ' + ev.name); renderPicker(); }
   }
 
   function rememberRecent(ev) {
