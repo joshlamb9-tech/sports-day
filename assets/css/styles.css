@@ -104,6 +104,7 @@ h3 { font-size: 1.15rem; font-weight: 700; }
   background: color-mix(in srgb, var(--paper) 86%, transparent);
   backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--line);
+  padding-top: env(safe-area-inset-top, 0px);   /* clear the iPhone notch */
 }
 .topbar .wrap { display: flex; align-items: center; gap: var(--s4); height: 60px; }
 .brand { display: flex; align-items: center; gap: var(--s2); font-weight: 800; font-size: 1.2rem; }
@@ -509,11 +510,25 @@ h3 { font-size: 1.15rem; font-weight: 700; }
 }
 
 /* ---- small screens ------------------------------------------------------ */
-@media (max-width: 560px) {
-  .tabs { gap: 0; }
-  .tab { padding: var(--s2) var(--s3); font-size: .9rem; }
+@media (max-width: 600px) {
+  /* top bar: brand + meet chip on row 1, full-width tabs on row 2 (no clipping) */
+  .topbar .wrap { flex-wrap: wrap; height: auto; min-height: 54px; padding-top: 8px; padding-bottom: 8px; gap: 8px; }
+  .brand { white-space: nowrap; font-size: 1.05rem; }
+  .brand .mark { width: 26px; height: 26px; font-size: .9rem; }
+  .meet-switch { margin-left: auto; max-width: 44vw; }
+  .tabs { order: 5; width: 100%; margin-left: 0; gap: 4px; }
+  .tab { flex: 1; text-align: center; padding: 8px 4px; font-size: .92rem; }
+
+  .wrap { padding-left: 14px; padding-right: 14px; }
+
   .house-row { grid-template-columns: 38px 1fr auto; gap: var(--s3); padding: var(--s3); }
   .house-score { font-size: 1.4rem; }
+
+  /* Setup event row: stack to two columns so 5 controls don't overflow */
+  .event-row { grid-template-columns: 1fr 1fr; }
+  .event-row > .input { grid-column: 1 / -1; }
+  .event-row > .row { grid-column: 1 / -1; justify-content: flex-end; }
+  .picker-controls .search { min-width: 140px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
