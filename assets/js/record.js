@@ -17,12 +17,14 @@
   let container = null, bundle = null, meetId = null;
   let current = null;          // { event, order:[{house_id, tie}], names:{house_id:name} }
   let queueOff = null;
+  let groupMode = 'age';       // 'age' = by year band, 'type' = by track/field/relay/fun
 
   const RECENT_KEY = function (m) { return 'sd_recent_' + m; };
 
   async function mount(node, ctx) {
     container = node;
     meetId = store.meetId();
+    try { groupMode = localStorage.getItem('sd_group_mode') || 'age'; } catch (e) {}
     if (!meetId) { renderNoMeet(); return; }
     bundle = await store.loadBundle(meetId);
     if (!bundle || !bundle.meet) { renderNoMeet(); return; }
@@ -81,10 +83,10 @@
       meetGate()
     ]);
 
-    const groups = groupEventsByAge();
     const search = el('input.input.search', { placeholder: 'Search events…', oninput: function (e) { filterCards(e.target.value); } });
-    wrap.appendChild(el('div.field', { style: { marginTop: '8px' } }, [search]));
+    wrap.appendChild(el('div.picker-controls', null, [groupToggle(), search]));
 
+    const groups = groupMode === 'type' ? groupEventsByType() : groupEventsByAge();
     const board = el('div.event-groups');
     groups.forEach(function (g) {
       const sec = el('div.event-group');
@@ -126,6 +128,34 @@
     return groups;
   }
 
+  function groupEventsByType() {
+    const order = [['track', 'Track'], ['field', 'Field'], ['relay', 'Relay'], ['other', 'Fun & novelty']];
+    const known = order.map(function (p) { return p[0]; });
+    const groups = [];
+    order.forEach(function (pair) {
+      const evs = bundle.events.filter(function (e) { return (e.discipline || 'track') === pair[0]; });
+      if (evs.length) groups.push({ label: pair[1], events: evs });
+    });
+    const rest = bundle.events.filter(function (e) { return known.indexOf(e.discipline || 'track') === -1; });
+    if (rest.length) groups.push({ label: 'Other', events: rest });
+    return groups;
+  }
+
+  function groupToggle() {
+    function btn(mode, label) {
+      return el('button.seg-btn' + (groupMode === mode ? '.active' : ''), {
+        text: label,
+        onclick: function () {
+          if (groupMode === mode) return;
+          groupMode = mode;
+          try { localStorage.setItem('sd_group_mode', mode); } catch (e) {}
+          renderPicker();
+        }
+      });
+    }
+    return el('div.seg', null, [btn('age', 'By year group'), btn('type', 'By type')]);
+  }
+
   function eventCard(ev) {
     const isMarks = (ev.entry_mode || 'places') === 'marks';
     const count = (bundle.results || []).filter(function (r) { return r.event_id === ev.id && !r.voided; }).length;
@@ -134,7 +164,8 @@
     return el('button.event-card' + (done ? '.done' : ''), { onclick: function () { openRecord(ev); } }, [
       el('span.ev-disc', { text: disciplineIcon(ev.discipline) }),
       el('span.ev-name', { text: ev.name || '(unnamed)' }),
-      el('div.row', { style: { gap: '6px' } }, [
+      el('div.row.wrap-x', { style: { gap: '6px' } }, [
+        groupMode === 'type' && ev.age_group_id ? el('span.chip', { text: ageLabel(ev.age_group_id) }) : null,
         cat ? el('span.chip', { text: cat }) : null,
         isMarks ? (count ? el('span.chip.done-chip', { text: '👤 ' + count }) : el('span.chip', { text: 'measured' })) : (done ? el('span.chip.done-chip', { text: '✓ recorded' }) : null)
       ])
@@ -300,9 +331,18 @@
   function renderField() {
     clear(container);
     const ev = current.event;
-    const list = el('div.entrant-list');
-    current.entrants.forEach(function (en) { list.appendChild(entrantRow(en)); });
-    const wrap = el('div.wrap.record', null, [
+    if (current.attemptCols == null) {
+      current.attemptCols = Math.max(3, current.entrants.reduce(function (m, e) { return Math.max(m, e.attempts.length); }, 0));
+    }
+    const tbody = el('tbody');
+    current._tbody = tbody;
+    current.entrants.forEach(function (en) { tbody.appendChild(entrantTr(en)); });
+    const headCells = [el('th.th-name', { text: 'Name' }), el('th', { text: 'House' })];
+    for (let i = 0; i < current.attemptCols; i++) headCells.push(el('th.th-att', { text: 'Att ' + (i + 1) }));
+    headCells.push(el('th.th-best', { text: 'Best' }), el('th', { text: '' }));
+    const table = el('table.entrant-table', null, [el('thead', null, [el('tr', null, headCells)]), tbody]);
+
+    const wrap = el('div.wrap.record.wide', null, [
       el('div.row.between.rec-head', null, [
         el('button.btn.btn-ghost', { text: '‹ Events', onclick: renderPicker }),
         el('div', { id: 'sync-chip', class: 'sync-chip' })
@@ -312,9 +352,12 @@
           el('h2', { text: ev.name }),
           el('p.muted', { text: [ageLabel(ev.age_group_id), ev.category !== 'mixed' ? ev.category : '', 'measured — best counts'].filter(Boolean).join(' · ') })
         ]),
-        el('p.help', { text: 'Add each child as they compete. Enter every attempt (best counts). Set their house or leave TBC — you can fill it in later. Positions are worked out automatically.' }),
-        list,
-        el('button.btn.btn-ghost.btn-block', { text: '+ Add entrant', onclick: function () { const en = newEntrant(); current.entrants.push(en); list.appendChild(entrantRow(en, true)); } }),
+        el('p.help', { text: 'Add each child as they compete; type each attempt along their row (best counts). House can be TBC for now. The leaderboard ranks automatically.' }),
+        el('div.entrant-table-wrap', null, [table]),
+        el('div.row.field-actions.wrap-x', null, [
+          el('button.btn.btn-primary', { text: '+ Add entrant', onclick: addEntrantToTable }),
+          el('button.btn.btn-ghost', { text: '+ Attempt column', onclick: function () { current.attemptCols++; renderField(); } })
+        ]),
         el('h3.section-title', { text: 'Provisional leaderboard', style: { marginTop: '20px' } }),
         el('div', { id: 'field-board' })
       ])
@@ -324,39 +367,46 @@
     refreshBoard();
   }
 
-  function entrantRow(en, focus) {
-    const bestBadge = el('span.entrant-best');
-    const attemptsWrap = el('div.attempts');
-    function redrawAttempts() {
-      clear(attemptsWrap);
-      en.attempts.forEach(function (val, i) {
-        const inp = el('input.input.attempt-input', { type: 'number', step: 'any', inputmode: 'decimal', value: val, placeholder: '#' + (i + 1) });
-        inp.addEventListener('change', function (e) { en.attempts[i] = e.target.value; onEntrantChange(en, bestBadge); });
-        attemptsWrap.appendChild(inp);
-      });
-      attemptsWrap.appendChild(el('button.btn.btn-ghost.btn-icon.attempt-add', { text: '+', title: 'Add attempt', onclick: function () { en.attempts.push(''); redrawAttempts(); } }));
-    }
-    const nameInput = el('input.input.entrant-name', { value: en.name, placeholder: 'Name', onchange: function (e) { en.name = e.target.value; onEntrantChange(en, bestBadge); } });
-    const houseSel = el('select.select.entrant-house');
-    houseSel.appendChild(el('option', { value: '', text: 'TBC house' }));
-    bundle.houses.forEach(function (h) { const o = el('option', { value: h.id, text: h.name }); if (en.houseId === h.id) o.selected = true; houseSel.appendChild(o); });
-    houseSel.addEventListener('change', function (e) { en.houseId = e.target.value || null; onEntrantChange(en, bestBadge); });
-    redrawAttempts();
-    updateBest(en, bestBadge);
-    const row = el('div.entrant-row', null, [
-      el('div.entrant-top', null, [nameInput, houseSel, bestBadge,
-        el('button.btn.btn-ghost.btn-icon', { text: '✕', title: 'Remove entrant', onclick: function () { removeEntrant(en, row); } })]),
-      attemptsWrap
-    ]);
-    if (focus) setTimeout(function () { nameInput.focus(); }, 30);
-    return row;
+  function addEntrantToTable() {
+    const en = newEntrant();
+    while (en.attempts.length < current.attemptCols) en.attempts.push('');
+    current.entrants.push(en);
+    if (current._tbody) current._tbody.appendChild(entrantTr(en, true));
   }
 
-  function updateBest(en, badge) {
-    const b = scoring.bestMark(numericAttempts(en.attempts));
-    badge.textContent = b != null ? ('best ' + window.SD.ui.fmtNum(b)) : '';
+  function entrantTr(en, focus) {
+    while (en.attempts.length < current.attemptCols) en.attempts.push('');
+    const bestCell = el('td.et-best');
+    function changed() { updateBestCell(en, bestCell); persistEntrant(en); refreshBoard(); }
+    const nameInput = el('input.input.et-name', { value: en.name, placeholder: 'Name', onchange: function (e) { en.name = e.target.value; changed(); } });
+    const houseSel = el('select.select.et-house');
+    houseSel.appendChild(el('option', { value: '', text: 'TBC' }));
+    bundle.houses.forEach(function (h) { const o = el('option', { value: h.id, text: h.name }); if (en.houseId === h.id) o.selected = true; houseSel.appendChild(o); });
+    houseSel.addEventListener('change', function (e) { en.houseId = e.target.value || null; changed(); });
+    const attCells = [];
+    for (let i = 0; i < current.attemptCols; i++) {
+      (function (idx) {
+        const inp = el('input.input.et-att', { type: 'number', step: 'any', inputmode: 'decimal', value: en.attempts[idx] != null ? en.attempts[idx] : '' });
+        inp.addEventListener('change', function (e) { en.attempts[idx] = e.target.value; changed(); });
+        attCells.push(el('td', null, [inp]));
+      })(i);
+    }
+    const tr = el('tr.entrant-tr', null, [
+      el('td.td-name', null, [nameInput]),
+      el('td.td-house', null, [houseSel])
+    ].concat(attCells, [
+      bestCell,
+      el('td.td-x', null, [el('button.btn.btn-ghost.btn-icon', { text: '✕', title: 'Remove', onclick: function () { removeEntrant(en, tr); } })])
+    ]));
+    updateBestCell(en, bestCell);
+    if (focus) setTimeout(function () { nameInput.focus(); }, 30);
+    return tr;
   }
-  function onEntrantChange(en, badge) { updateBest(en, badge); persistEntrant(en); refreshBoard(); }
+
+  function updateBestCell(en, cell) {
+    const b = scoring.bestMark(numericAttempts(en.attempts));
+    cell.textContent = b != null ? window.SD.ui.fmtNum(b) : '–';
+  }
 
   function persistEntrant(en) {
     const name = (en.name || '').trim();

@@ -337,6 +337,11 @@ h3 { font-size: 1.15rem; font-weight: 700; }
 .recorder-bar { display: flex; align-items: center; gap: var(--s2); margin: var(--s2) 0; }
 .recorder-input { max-width: 240px; min-height: 42px; }
 .search { min-height: 48px; }
+.picker-controls { display: flex; flex-wrap: wrap; gap: var(--s3); align-items: center; margin-top: var(--s3); }
+.picker-controls .search { flex: 1; min-width: 180px; }
+.seg { display: inline-flex; background: var(--paper-2); border-radius: var(--pill); padding: 3px; gap: 2px; }
+.seg-btn { padding: 8px var(--s4); border-radius: var(--pill); font-weight: 700; color: var(--ink-soft); min-height: 40px; white-space: nowrap; }
+.seg-btn.active { background: var(--card); color: var(--ink); box-shadow: var(--shadow-1); }
 .event-group { margin-top: var(--s4); }
 .group-title { margin-bottom: var(--s2); color: var(--ink-soft); }
 .event-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--s3); }
@@ -386,6 +391,21 @@ h3 { font-size: 1.15rem; font-weight: 700; }
 .attempts { display: flex; flex-wrap: wrap; gap: var(--s2); margin-top: var(--s2); }
 .attempt-input { width: 74px; min-height: 40px; text-align: center; }
 .attempt-add { min-height: 40px; width: 40px; }
+
+/* Field entrant table (fast entry for many entrants) */
+.wrap.wide { max-width: 1080px; }
+.entrant-table-wrap { overflow-x: auto; margin: var(--s3) 0; -webkit-overflow-scrolling: touch; }
+.entrant-table { width: 100%; border-collapse: collapse; min-width: 560px; }
+.entrant-table th { text-align: left; font-size: .72rem; text-transform: uppercase; letter-spacing: .07em; color: var(--ink-faint); padding: 6px 8px; border-bottom: 2px solid var(--line); white-space: nowrap; }
+.entrant-table td { padding: 4px 6px; border-bottom: 1px solid var(--line-soft); vertical-align: middle; }
+.entrant-table .input { min-height: 40px; }
+.et-name { min-width: 118px; }
+.et-house { min-width: 92px; }
+.th-att { text-align: center; }
+.et-att { width: 70px; text-align: center; }
+.et-best { font-weight: 800; color: var(--primary-press); text-align: center; white-space: nowrap; }
+.td-x { width: 44px; }
+.field-actions { gap: var(--s3); margin-top: var(--s2); }
 .fb-row { display: grid; grid-template-columns: 56px 1fr auto auto auto; gap: var(--s2); align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line-soft); }
 .fb-pos { font-weight: 800; }
 .fb-name { font-weight: 700; }
