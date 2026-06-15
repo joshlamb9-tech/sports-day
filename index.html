@@ -20,7 +20,7 @@
         <span class="mark">🏅</span>
         <span>Sports <span class="gold-accent">Day</span></span>
       </a>
-      <span id="meet-label" class="chip" hidden></span>
+      <a id="meet-label" class="chip meet-switch" href="#/meets" hidden title="Switch meet"></a>
       <nav class="tabs">
         <a class="tab" data-route="/" href="#/">Board</a>
         <a class="tab" data-route="/record" href="#/record">Record</a>
@@ -33,6 +33,7 @@
 
   <!-- ===== Views (router shows one) ===== -->
   <main>
+    <section id="view-lobby"     class="view" hidden></section>
     <section id="view-spectator" class="view" hidden></section>
     <section id="view-record"    class="view" hidden></section>
     <section id="view-admin"     class="view" hidden></section>
@@ -53,6 +54,7 @@
   <script src="assets/js/store.js"></script>
   <script src="assets/js/live.js"></script>
   <script src="assets/js/export.js"></script>
+  <script src="assets/js/lobby.js"></script>
   <script src="assets/js/setup.js"></script>
   <script src="assets/js/record.js"></script>
   <script src="assets/js/admin.js"></script>

@@ -14,11 +14,12 @@
 
   const ROUTES = {
     '/':       { module: 'spectator', view: 'view-spectator', gate: null },
+    '/meets':  { module: 'lobby',     view: 'view-lobby',     gate: null },
     '/record': { module: 'record',    view: 'view-record',    gate: 'recorder' },
     '/admin':  { module: 'admin',     view: 'view-admin',     gate: 'admin' },
     '/setup':  { module: 'setup',     view: 'view-setup',     gate: 'admin' }
   };
-  const VIEW_IDS = ['view-spectator', 'view-record', 'view-admin', 'view-setup', 'view-loading'];
+  const VIEW_IDS = ['view-lobby', 'view-spectator', 'view-record', 'view-admin', 'view-setup', 'view-loading'];
 
   let currentModule = null;
 
@@ -42,11 +43,10 @@
   function setActiveTab(path) {
     $$('.tab').forEach(function (t) { t.classList.toggle('active', t.getAttribute('data-route') === path); });
     const ml = $('#meet-label');
+    if (!ml) return;
     const cached = store.meetId() && store.cachedBundle(store.meetId());
-    if (ml) {
-      if (cached && cached.meet) { ml.hidden = false; ml.textContent = cached.meet.name; }
-      else { ml.hidden = true; }
-    }
+    if (path === '/meets' || !store.meetId()) { ml.hidden = true; }
+    else { ml.hidden = false; ml.textContent = '⇄ ' + ((cached && cached.meet && cached.meet.name) || 'Switch meet'); }
   }
 
   async function getMeet(meetId) {
@@ -98,6 +98,9 @@
     const { path, query } = parseHash();
     if (query.meet && query.meet !== store.meetId()) store.setMeetId(query.meet);
     else if (store.meetId()) store.setMeetId(store.meetId()); // ensure queue meet is set
+
+    // No meet chosen yet → send to the lobby to pick a (live) one. Setup can bootstrap without one.
+    if (!store.meetId() && path !== '/meets' && path !== '/setup') { location.hash = '#/meets'; return; }
 
     const def = ROUTES[path] || ROUTES['/'];
 

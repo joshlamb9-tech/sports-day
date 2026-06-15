@@ -298,6 +298,25 @@ h3 { font-size: 1.15rem; font-weight: 700; }
 .conn.sync { color: var(--warn); }
 .conn.ok { color: transparent; }
 
+/* ---- Lobby / meet picker ---- */
+.meet-switch { cursor: pointer; text-decoration: none; max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.meet-switch:hover { background: var(--paper-2); color: var(--ink); }
+.lobby { max-width: 840px; }
+.lobby-head { text-align: center; padding: 6vh 0 var(--s4); }
+.brand-big { display: inline-flex; align-items: center; gap: var(--s3); font-weight: 800; font-size: 1.5rem; }
+.brand-big .mark { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: var(--primary); color: #fff; font-size: 1.3rem; box-shadow: var(--shadow-pop); }
+.lobby-head h1 { margin-top: var(--s4); }
+.lobby-sec { display: flex; align-items: center; gap: var(--s2); margin: var(--s5) 0 var(--s3); color: var(--ink-soft); text-transform: uppercase; letter-spacing: .12em; font-size: .8rem; font-weight: 700; }
+.lobby-sec .dot { background: var(--ok); }
+.meet-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--s3); }
+.meet-card { display: block; text-align: left; padding: var(--s4); border-radius: var(--r-lg); border: 1.5px solid var(--line); background: var(--card); box-shadow: var(--shadow-1); transition: transform .08s, border-color .12s, box-shadow .12s; }
+.meet-card:hover { border-color: var(--ink-faint); }
+.meet-card:active { transform: scale(.99); }
+.meet-card.is-live { border-color: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 15%, transparent); }
+.meet-card h3 { font-size: 1.15rem; }
+.meet-badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: var(--pill); background: var(--ok); color: #fff; font-weight: 800; font-size: .72rem; letter-spacing: .06em; }
+.meet-badge .dot { background: #fff; }
+
 /* ---- Setup ---- */
 .editable-row { gap: var(--s2); align-items: center; }
 .editable-row .input { flex: 1; }
