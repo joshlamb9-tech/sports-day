@@ -239,12 +239,12 @@
       const rows = el('div.ev-results');
       function placingRow(p) {
         const posTxt = p.position != null ? (medal(p.position) + ordinal(p.position)) : '—';
-        return el('div.ev-result-row' + (isField ? '.is-field' : ''), null, [
+        return el('div.ev-result-row.has-measure', null, [
           el('span.err-pos', { text: posTxt }),
           p.houseId ? el('span.swatch', { style: { background: p.houseColour } }) : el('span.chip.tbc-chip', { text: 'TBC' }),
           el('span.err-house', { text: p.houseName || (p.athlete ? '' : '—') }),
           p.athlete ? el('span.err-athlete.muted', { text: p.athlete }) : el('span'),
-          isField ? el('span.err-mark.numeral', { text: p.mark != null ? fmtNum(p.mark) : '·' }) : null,
+          el('span.err-mark.numeral', { text: p.mark != null ? fmtNum(p.mark) : '', title: isField ? 'distance/height' : 'time' }),
           el('span.err-pts.numeral', { text: fmtNum(p.points) }),
           el('button.btn.btn-ghost.btn-icon.no-print', { text: '✕', title: 'Void this entry', onclick: function () { voidResult(p.resultId); } })
         ]);

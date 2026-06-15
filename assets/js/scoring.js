@@ -127,7 +127,7 @@
           houseId: r.house_id || null,
           houseName: r.house_id ? h.name : null, houseColour: r.house_id ? h.colour : null,
           athlete: r.athlete_name || null,
-          mark: isMarks && bestById[r.id] != null ? bestById[r.id] : null,
+          mark: isMarks ? (bestById[r.id] != null ? bestById[r.id] : null) : (r.mark != null ? r.mark : null),
           attempts: isMarks ? (r.attempts || []) : null,
           points: pointsByResult[r.id] || 0
         };

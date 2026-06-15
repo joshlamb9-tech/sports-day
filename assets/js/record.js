@@ -211,7 +211,7 @@
     const existing = (bundle.results || []).filter(function (r) { return r.event_id === ev.id && (r.heat || 'A') === heat && !r.voided; })
       .sort(function (a, b) { return a.position - b.position; });
     const order = []; let prevPos = null;
-    existing.forEach(function (r) { order.push({ house_id: r.house_id, tie: r.position === prevPos, name: r.athlete_name || '' }); prevPos = r.position; });
+    existing.forEach(function (r) { order.push({ house_id: r.house_id, tie: r.position === prevPos, name: r.athlete_name || '', time: r.mark != null ? String(r.mark) : '' }); prevPos = r.position; });
     current.order = order; current.tieNext = false; current.dirty = false;
   }
 
@@ -303,6 +303,7 @@
         el('span.pv-swatch', { style: { background: h.colour } }),
         el('span.pv-name', { text: h.name }),
         bundle.meet.track_individual ? el('input.input.pv-name-input', { placeholder: 'pupil (optional)', value: o.name || '', oninput: function (e) { o.name = e.target.value; current.dirty = true; } }) : null,
+        el('input.input.pv-time-input', { type: 'number', step: 'any', inputmode: 'decimal', placeholder: 'time', value: o.time || '', oninput: function (e) { o.time = e.target.value; current.dirty = true; } }),
         el('span.pv-pts', { text: window.SD.ui.fmtNum(pts) + ' pt' + (pts === 1 ? '' : 's') }),
         el('button.btn.btn-ghost.btn-icon', { text: '✕', title: 'Remove place', onclick: function () { removePlacing(i); } })
       ]));
@@ -333,6 +334,7 @@
       return {
         meet_id: meetId, event_id: ev.id, heat: heat, position: posOf(current.order, i),
         house_id: o.house_id, athlete_name: (o.name || '').trim() || null,
+        mark: (o.time !== '' && o.time != null && !isNaN(Number(o.time))) ? Number(o.time) : null,
         recorded_by: recordedBy, client_uuid: api.uuid()
       };
     });

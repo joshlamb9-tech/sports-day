@@ -373,12 +373,13 @@ h3 { font-size: 1.15rem; font-weight: 700; }
 .tile-pos { font-size: .95rem; font-weight: 800; color: var(--house); }
 .tie-toggle { display: flex; align-items: center; gap: var(--s2); font-weight: 600; color: var(--ink-soft); margin-bottom: var(--s3); }
 .order-preview { display: grid; gap: var(--s2); margin: var(--s3) 0; }
-.preview-row { display: grid; grid-template-columns: auto 22px 1fr auto auto; gap: var(--s2); align-items: center; padding: var(--s2) var(--s3); background: var(--paper-2); border-radius: var(--r-sm); }
+.preview-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); padding: var(--s2) var(--s3); background: var(--paper-2); border-radius: var(--r-sm); }
 .pv-pos { font-weight: 800; }
 .pv-swatch { width: 18px; height: 18px; border-radius: 5px; }
 .pv-name { font-weight: 700; }
-.pv-name-input { min-height: 38px; max-width: 160px; }
-.pv-pts { font-weight: 800; color: var(--primary-press); }
+.pv-name-input { min-height: 38px; flex: 1 1 110px; max-width: 160px; }
+.pv-time-input { min-height: 38px; width: 84px; text-align: center; }
+.pv-pts { font-weight: 800; color: var(--primary-press); margin-left: auto; }
 .preview-empty { padding: var(--s3); }
 .rc-actions { margin-top: var(--s4); gap: var(--s3); }
 
@@ -423,7 +424,7 @@ h3 { font-size: 1.15rem; font-weight: 700; }
 .fb-pts { font-weight: 700; color: var(--primary-press); font-size: .85rem; }
 
 /* Admin: field rows + TBC chip */
-.ev-result-row.is-field { grid-template-columns: 48px auto minmax(50px, 1fr) 1.1fr auto auto auto; }
+.ev-result-row.has-measure { grid-template-columns: 48px auto minmax(50px, 1fr) 1.1fr auto auto auto; }
 .err-mark { font-weight: 800; }
 .tbc-chip { background: #fff4e0; color: #8a5a00; font-weight: 800; }
 
