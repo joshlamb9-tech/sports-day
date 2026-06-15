@@ -127,14 +127,16 @@
   }
 
   function eventCard(ev) {
-    const done = ev.status === 'done';
+    const isMarks = (ev.entry_mode || 'places') === 'marks';
+    const count = (bundle.results || []).filter(function (r) { return r.event_id === ev.id && !r.voided; }).length;
+    const done = !isMarks && ev.status === 'done';
     const cat = ev.category && ev.category !== 'mixed' ? ev.category : '';
     return el('button.event-card' + (done ? '.done' : ''), { onclick: function () { openRecord(ev); } }, [
       el('span.ev-disc', { text: disciplineIcon(ev.discipline) }),
       el('span.ev-name', { text: ev.name || '(unnamed)' }),
       el('div.row', { style: { gap: '6px' } }, [
         cat ? el('span.chip', { text: cat }) : null,
-        done ? el('span.chip.done-chip', { text: '✓ recorded' }) : null
+        isMarks ? (count ? el('span.chip.done-chip', { text: '👤 ' + count }) : el('span.chip', { text: 'measured' })) : (done ? el('span.chip.done-chip', { text: '✓ recorded' }) : null)
       ])
     ]);
   }
@@ -150,6 +152,7 @@
 
   /* ---------- record card ---------- */
   function openRecord(ev) {
+    if ((ev.entry_mode || 'places') === 'marks') { return openField(ev); }
     // preload existing recorded order (for re-recording / correcting)
     const existing = (bundle.results || []).filter(function (r) { return r.event_id === ev.id && !r.voided; })
       .sort(function (a, b) { return a.position - b.position; });
@@ -277,6 +280,125 @@
       list.unshift({ id: ev.id, name: ev.name, at: Date.now() });
       localStorage.setItem(k, JSON.stringify(list.slice(0, 30)));
     } catch (e) {}
+  }
+
+  /* ---------- field event (measured marks, open entrant list) ---------- */
+  function newEntrant() { return { clientUuid: api.uuid(), id: null, name: '', houseId: null, attempts: [''] }; }
+  function numericAttempts(arr) { return (arr || []).filter(function (a) { return a !== '' && a != null && !isNaN(Number(a)); }).map(Number); }
+
+  function openField(ev) {
+    const existing = (bundle.results || []).filter(function (r) { return r.event_id === ev.id && !r.voided; })
+      .sort(function (a, b) { return (scoring.bestMark(b.attempts) || -1) - (scoring.bestMark(a.attempts) || -1); });
+    const entrants = existing.map(function (r) {
+      return { clientUuid: r.client_uuid || api.uuid(), id: r.id, name: r.athlete_name || '', houseId: r.house_id || null, attempts: (r.attempts || []).map(String) };
+    });
+    if (!entrants.length) entrants.push(newEntrant());
+    current = { event: ev, mode: 'marks', entrants: entrants };
+    renderField();
+  }
+
+  function renderField() {
+    clear(container);
+    const ev = current.event;
+    const list = el('div.entrant-list');
+    current.entrants.forEach(function (en) { list.appendChild(entrantRow(en)); });
+    const wrap = el('div.wrap.record', null, [
+      el('div.row.between.rec-head', null, [
+        el('button.btn.btn-ghost', { text: '‹ Events', onclick: renderPicker }),
+        el('div', { id: 'sync-chip', class: 'sync-chip' })
+      ]),
+      el('div.card.record-card', null, [
+        el('div.rc-title', null, [
+          el('h2', { text: ev.name }),
+          el('p.muted', { text: [ageLabel(ev.age_group_id), ev.category !== 'mixed' ? ev.category : '', 'measured — best counts'].filter(Boolean).join(' · ') })
+        ]),
+        el('p.help', { text: 'Add each child as they compete. Enter every attempt (best counts). Set their house or leave TBC — you can fill it in later. Positions are worked out automatically.' }),
+        list,
+        el('button.btn.btn-ghost.btn-block', { text: '+ Add entrant', onclick: function () { const en = newEntrant(); current.entrants.push(en); list.appendChild(entrantRow(en, true)); } }),
+        el('h3.section-title', { text: 'Provisional leaderboard', style: { marginTop: '20px' } }),
+        el('div', { id: 'field-board' })
+      ])
+    ]);
+    container.appendChild(wrap);
+    updateChip();
+    refreshBoard();
+  }
+
+  function entrantRow(en, focus) {
+    const bestBadge = el('span.entrant-best');
+    const attemptsWrap = el('div.attempts');
+    function redrawAttempts() {
+      clear(attemptsWrap);
+      en.attempts.forEach(function (val, i) {
+        const inp = el('input.input.attempt-input', { type: 'number', step: 'any', inputmode: 'decimal', value: val, placeholder: '#' + (i + 1) });
+        inp.addEventListener('change', function (e) { en.attempts[i] = e.target.value; onEntrantChange(en, bestBadge); });
+        attemptsWrap.appendChild(inp);
+      });
+      attemptsWrap.appendChild(el('button.btn.btn-ghost.btn-icon.attempt-add', { text: '+', title: 'Add attempt', onclick: function () { en.attempts.push(''); redrawAttempts(); } }));
+    }
+    const nameInput = el('input.input.entrant-name', { value: en.name, placeholder: 'Name', onchange: function (e) { en.name = e.target.value; onEntrantChange(en, bestBadge); } });
+    const houseSel = el('select.select.entrant-house');
+    houseSel.appendChild(el('option', { value: '', text: 'TBC house' }));
+    bundle.houses.forEach(function (h) { const o = el('option', { value: h.id, text: h.name }); if (en.houseId === h.id) o.selected = true; houseSel.appendChild(o); });
+    houseSel.addEventListener('change', function (e) { en.houseId = e.target.value || null; onEntrantChange(en, bestBadge); });
+    redrawAttempts();
+    updateBest(en, bestBadge);
+    const row = el('div.entrant-row', null, [
+      el('div.entrant-top', null, [nameInput, houseSel, bestBadge,
+        el('button.btn.btn-ghost.btn-icon', { text: '✕', title: 'Remove entrant', onclick: function () { removeEntrant(en, row); } })]),
+      attemptsWrap
+    ]);
+    if (focus) setTimeout(function () { nameInput.focus(); }, 30);
+    return row;
+  }
+
+  function updateBest(en, badge) {
+    const b = scoring.bestMark(numericAttempts(en.attempts));
+    badge.textContent = b != null ? ('best ' + window.SD.ui.fmtNum(b)) : '';
+  }
+  function onEntrantChange(en, badge) { updateBest(en, badge); persistEntrant(en); refreshBoard(); }
+
+  function persistEntrant(en) {
+    const name = (en.name || '').trim();
+    const attempts = numericAttempts(en.attempts);
+    if (!name && !attempts.length && !en.houseId) return; // nothing worth saving yet
+    const row = { meet_id: meetId, event_id: current.event.id, athlete_name: name || null, house_id: en.houseId || null, position: null, attempts: attempts, recorded_by: store.recorder() || null, client_uuid: en.clientUuid };
+    queue.enqueue({ kind: 'upsertResult', eventId: current.event.id, row: row });
+    bundle.results = (bundle.results || []).filter(function (r) { return r.client_uuid !== en.clientUuid; }).concat([Object.assign({ id: en.id, voided: false, created_at: new Date().toISOString() }, row)]);
+  }
+  async function removeEntrant(en, rowNode) {
+    const ok = await confirmDialog({ title: 'Remove this entrant?', ok: 'Remove', danger: true });
+    if (!ok) return;
+    current.entrants = current.entrants.filter(function (x) { return x !== en; });
+    if (en.id || numericAttempts(en.attempts).length || en.name) queue.enqueue({ kind: 'deleteResult', clientUuid: en.clientUuid });
+    bundle.results = (bundle.results || []).filter(function (r) { return r.client_uuid !== en.clientUuid; });
+    if (rowNode) rowNode.remove();
+    refreshBoard();
+  }
+
+  function refreshBoard() {
+    const board = window.SD.ui.$('#field-board', container);
+    if (!board) return;
+    clear(board);
+    const scheme = (current.event.points_scheme && Object.keys(current.event.points_scheme).length) ? current.event.points_scheme : bundle.meet.points_scheme;
+    const ranked = current.entrants.map(function (e) { return { e: e, best: scoring.bestMark(numericAttempts(e.attempts)) }; })
+      .filter(function (x) { return x.best != null; }).sort(function (a, b) { return b.best - a.best; });
+    if (!ranked.length) { board.appendChild(el('p.muted', { text: 'No marks entered yet.' })); return; }
+    let pos = 0, prev = null; const rows = [];
+    ranked.forEach(function (x, i) { if (prev === null || x.best !== prev) { pos = i + 1; prev = x.best; } rows.push({ en: x.e, best: x.best, position: pos }); });
+    const pseudo = rows.map(function (r, i) { return { id: i, position: r.position, house_id: r.en.houseId }; });
+    const award = scoring.awardEventPoints(scheme, bundle.meet.tie_policy, pseudo);
+    rows.forEach(function (r, i) { r.points = award.points[i] || 0; });
+    rows.forEach(function (r) {
+      const h = houseById(r.en.houseId);
+      board.appendChild(el('div.fb-row', null, [
+        el('span.fb-pos', { text: medal(r.position) + ordinal(r.position) }),
+        el('span.fb-name', { text: r.en.name || '(no name)' }),
+        r.en.houseId ? el('span.swatch', { style: { background: h.colour } }) : el('span.chip', { text: 'TBC' }),
+        el('span.fb-mark.numeral', { text: window.SD.ui.fmtNum(r.best) }),
+        el('span.fb-pts', { text: window.SD.ui.fmtNum(r.points) + ' pt' + (r.points === 1 ? '' : 's') })
+      ]));
+    });
   }
 
   /* ---------- helpers ---------- */

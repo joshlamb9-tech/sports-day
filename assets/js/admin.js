@@ -51,6 +51,7 @@
     const wrap = el('div.wrap.admin', null, [
       header(b, s),
       revealControl(b),
+      tbcBanner(s),
       winnerBanner(s),
       standingsCard(b, s),
       winnersCard(b, s),
@@ -99,6 +100,14 @@
       toast(reveal ? 'Standings revealed on the big screen' : 'Standings hidden on the big screen');
       live.refresh();
     } catch (e) { toast('Could not update: ' + (e.message || e), 'error'); }
+  }
+
+  function tbcBanner(s) {
+    const n = s ? s.events.reduce(function (a, e) { return a + (e.tbcCount || 0); }, 0) : 0;
+    if (!n) return el('span', { hidden: 'hidden' });
+    return el('div.banner.offline', { style: { marginTop: '12px' } }, [
+      el('span', { text: '🏷️ ' + n + ' entrant' + (n === 1 ? '' : 's') + ' still set to TBC — assign a house (on the Record screen) so their points count toward a House.' })
+    ]);
   }
 
   function winnerBanner(s) {
@@ -215,11 +224,13 @@
     const body = el('div.stack-sm');
     if (!s || !s.events.length) { body.appendChild(empty('No events.')); return section('Events & results', body); }
     s.events.forEach(function (ev) {
+      const isField = ev.entryMode === 'marks';
       const head = el('div.row.between.ev-head', null, [
         el('div', null, [
           el('strong', { text: ev.name }),
-          el('span.muted', { text: '  ' + [ev.ageGroup, ev.category !== 'mixed' ? ev.category : '', ev.isRelay ? 'relay' : ''].filter(Boolean).join(' · ') }),
-          ev.customScheme ? el('span.chip.coral', { text: ' ' + schemeToStr(ev.customScheme), title: 'Custom points scheme' }) : null
+          el('span.muted', { text: '  ' + [ev.ageGroup, ev.category !== 'mixed' ? ev.category : '', ev.isRelay ? 'relay' : '', isField ? 'measured' : ''].filter(Boolean).join(' · ') }),
+          ev.customScheme ? el('span.chip.coral', { text: ' ' + schemeToStr(ev.customScheme), title: 'Custom points scheme' }) : null,
+          ev.tbcCount ? el('span.chip.tbc-chip', { text: ev.tbcCount + ' TBC' }) : null
         ]),
         ev.recorded
           ? el('button.btn.btn-ghost.btn-sm', { text: 'Void all', onclick: function () { voidEvent(ev); } })
@@ -227,18 +238,20 @@
       ]);
       const rows = el('div.ev-results');
       ev.placings.forEach(function (p) {
-        rows.appendChild(el('div.ev-result-row', null, [
-          el('span.err-pos', { text: medal(p.position) + ordinal(p.position) }),
-          el('span.swatch', { style: { background: p.houseColour } }),
-          el('span.err-house', { text: p.houseName }),
+        const posTxt = p.position != null ? (medal(p.position) + ordinal(p.position)) : '—';
+        rows.appendChild(el('div.ev-result-row' + (isField ? '.is-field' : ''), null, [
+          el('span.err-pos', { text: posTxt }),
+          p.houseId ? el('span.swatch', { style: { background: p.houseColour } }) : el('span.chip.tbc-chip', { text: 'TBC' }),
+          el('span.err-house', { text: p.houseName || (p.athlete ? '' : '—') }),
           p.athlete ? el('span.err-athlete.muted', { text: p.athlete }) : el('span'),
+          isField ? el('span.err-mark.numeral', { text: p.mark != null ? fmtNum(p.mark) : '·' }) : null,
           el('span.err-pts.numeral', { text: fmtNum(p.points) }),
-          el('button.btn.btn-ghost.btn-icon.no-print', { text: '✕', title: 'Void this placing', onclick: function () { voidResult(p.resultId); } })
+          el('button.btn.btn-ghost.btn-icon.no-print', { text: '✕', title: 'Void this entry', onclick: function () { voidResult(p.resultId); } })
         ]));
       });
       body.appendChild(el('div.ev-block', null, [head, ev.recorded ? rows : el('p.muted.ev-empty', { text: 'Awaiting result.' })]));
     });
-    body.appendChild(el('p.help.no-print', { text: 'To re-enter an event, void it here then record it again on the Record screen.' }));
+    body.appendChild(el('p.help.no-print', { text: 'Field events rank by best mark automatically. To re-enter a race, void it here then record it again.' }));
     return section('Events & results', body);
   }
 

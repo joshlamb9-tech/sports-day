@@ -357,6 +357,27 @@ h3 { font-size: 1.15rem; font-weight: 700; }
 .preview-empty { padding: var(--s3); }
 .rc-actions { margin-top: var(--s4); gap: var(--s3); }
 
+/* Field-event entrant list (measured events) */
+.entrant-list { display: grid; gap: var(--s3); }
+.entrant-row { border: 1.5px solid var(--line); border-radius: var(--r); padding: var(--s3); background: var(--card); }
+.entrant-top { display: grid; grid-template-columns: 1fr auto auto auto; gap: var(--s2); align-items: center; }
+.entrant-name { min-height: 44px; }
+.entrant-house { min-height: 44px; max-width: 132px; }
+.entrant-best { font-weight: 800; color: var(--primary-press); font-size: .82rem; white-space: nowrap; }
+.attempts { display: flex; flex-wrap: wrap; gap: var(--s2); margin-top: var(--s2); }
+.attempt-input { width: 74px; min-height: 40px; text-align: center; }
+.attempt-add { min-height: 40px; width: 40px; }
+.fb-row { display: grid; grid-template-columns: 56px 1fr auto auto auto; gap: var(--s2); align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line-soft); }
+.fb-pos { font-weight: 800; }
+.fb-name { font-weight: 700; }
+.fb-mark { font-weight: 800; }
+.fb-pts { font-weight: 700; color: var(--primary-press); font-size: .85rem; }
+
+/* Admin: field rows + TBC chip */
+.ev-result-row.is-field { grid-template-columns: 48px auto minmax(50px, 1fr) 1.1fr auto auto auto; }
+.err-mark { font-weight: 800; }
+.tbc-chip { background: #fff4e0; color: #8a5a00; font-weight: 800; }
+
 .sync-chip { display: inline-flex; align-items: center; gap: var(--s2); padding: 6px var(--s3); border-radius: var(--pill); font-weight: 700; font-size: .82rem; white-space: nowrap; }
 .sync-chip.ok { background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--ok); }
 .sync-chip.ok .dot { background: var(--ok); }

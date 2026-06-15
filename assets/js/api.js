@@ -91,6 +91,16 @@
         headers: headers({ Prefer: 'return=minimal' })
       });
       return handle(res);
+    },
+
+    // insert-or-update on a conflict column (PostgREST upsert) — used for incremental entrant saves
+    async upsert(table, rows, conflict) {
+      const res = await timedFetch(REST + table + '?on_conflict=' + (conflict || 'client_uuid'), {
+        method: 'POST',
+        headers: headers({ Prefer: 'resolution=merge-duplicates,return=minimal' }),
+        body: JSON.stringify(rows)
+      });
+      return handle(res);
     }
   };
 
@@ -121,6 +131,16 @@
       }
       // mark the event done (best-effort; not fatal if it fails)
       try { await api.update('sportsday_events', { status: 'done' }, { id: 'eq.' + op.eventId }); } catch (e) {}
+      return;
+    }
+    if (op.kind === 'upsertResult') {
+      // incremental per-entrant save (field events): insert or update by client_uuid
+      await api.upsert('sportsday_results', [op.row], 'client_uuid');
+      if (op.eventId) { try { await api.update('sportsday_events', { status: 'recording' }, { id: 'eq.' + op.eventId, status: 'eq.pending' }); } catch (e) {} }
+      return;
+    }
+    if (op.kind === 'deleteResult') {
+      await api.del('sportsday_results', { client_uuid: 'eq.' + op.clientUuid });
       return;
     }
     if (op.kind === 'raw') {

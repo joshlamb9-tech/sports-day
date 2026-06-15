@@ -21,11 +21,12 @@
     });
     lines.push('');
     lines.push(['RESULTS BY EVENT'].join(','));
-    lines.push(['Event', 'Age group', 'Category', 'Place', 'House', 'Pupil', 'Points'].map(csvCell).join(','));
+    lines.push(['Event', 'Age group', 'Category', 'Place', 'House', 'Pupil', 'Mark', 'Points'].map(csvCell).join(','));
     (scores ? scores.events : []).forEach(function (ev) {
-      if (!ev.placings.length) { lines.push([ev.name, ev.ageGroup || '', ev.category || '', '', '(not recorded)', '', ''].map(csvCell).join(',')); return; }
+      if (!ev.placings.length) { lines.push([ev.name, ev.ageGroup || '', ev.category || '', '', '(not recorded)', '', '', ''].map(csvCell).join(',')); return; }
       ev.placings.forEach(function (p) {
-        lines.push([ev.name, ev.ageGroup || '', ev.category || '', ordinal(p.position), p.houseName, p.athlete || '', p.points].map(csvCell).join(','));
+        const place = p.position != null ? ordinal(p.position) : '—';
+        lines.push([ev.name, ev.ageGroup || '', ev.category || '', place, p.houseName || 'TBC', p.athlete || '', p.mark != null ? p.mark : '', p.points].map(csvCell).join(','));
       });
     });
     if (scores && scores.trackIndividual && scores.champions.length) {

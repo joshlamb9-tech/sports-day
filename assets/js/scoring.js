@@ -19,6 +19,19 @@
   // round to 2dp but keep integers clean
   function tidy(n) { return Math.round(n * 100) / 100; }
 
+  // best (highest) attempt for a measured field entrant; null if no valid marks yet
+  function bestMark(attempts) {
+    if (!attempts || !attempts.length) return null;
+    let best = null;
+    for (let i = 0; i < attempts.length; i++) {
+      const a = attempts[i];
+      if (a === '' || a == null) continue;
+      const n = Number(a);
+      if (!isNaN(n) && (best === null || n > best)) best = n;
+    }
+    return best;
+  }
+
   /* For one event's results, award points per placing, honouring ties.
    * tiePolicy 'split'  → tied places share the sum of the places they occupy (athletics standard).
    * tiePolicy 'shared' → every tied place gets the full points for that position; next position skips.
@@ -76,23 +89,51 @@
     events.forEach(function (ev) {
       const er = resultsByEvent[ev.id] || [];
       const evScheme = (ev.points_scheme && Object.keys(ev.points_scheme).length) ? ev.points_scheme : scheme;
-      const res = awardEventPoints(evScheme, tiePolicy, er);
-      Object.keys(res.points).forEach(function (id) { pointsByResult[id] = res.points[id]; });
-      const placings = er.slice().sort(function (a, b) { return num(a.position) - num(b.position); })
-        .map(function (r) {
-          const h = houseById[r.house_id] || {};
-          return {
-            resultId: r.id, position: num(r.position), houseId: r.house_id,
-            houseName: h.name, houseColour: h.colour, athlete: r.athlete_name || null,
-            points: pointsByResult[r.id] || 0
-          };
+      const isMarks = ev.entry_mode === 'marks';
+
+      // For measured field events, derive positions by ranking best marks (desc); ties share a place.
+      const posById = {}, bestById = {};
+      let awardRows;
+      if (isMarks) {
+        const ranked = er.map(function (r) { return { r: r, best: bestMark(r.attempts) }; })
+          .filter(function (x) { return x.best != null; })
+          .sort(function (a, b) { return b.best - a.best; });
+        let pos = 0, prev = null;
+        ranked.forEach(function (x, i) {
+          if (prev === null || x.best !== prev) { pos = i + 1; prev = x.best; }
+          posById[x.r.id] = pos; bestById[x.r.id] = x.best;
         });
+        awardRows = ranked.map(function (x) { return { id: x.r.id, position: posById[x.r.id], house_id: x.r.house_id }; });
+      } else {
+        awardRows = er;
+      }
+
+      const res = awardEventPoints(evScheme, tiePolicy, awardRows);
+      Object.keys(res.points).forEach(function (id) { pointsByResult[id] = res.points[id]; });
+
+      const placings = er.slice().map(function (r) {
+        const h = houseById[r.house_id] || {};
+        const position = isMarks ? (posById[r.id] != null ? posById[r.id] : null) : num(r.position);
+        return {
+          resultId: r.id, position: position, houseId: r.house_id || null,
+          houseName: r.house_id ? h.name : null, houseColour: r.house_id ? h.colour : null,
+          athlete: r.athlete_name || null,
+          mark: isMarks && bestById[r.id] != null ? bestById[r.id] : null,
+          attempts: isMarks ? (r.attempts || []) : null,
+          points: pointsByResult[r.id] || 0
+        };
+      }).sort(function (a, b) {
+        const pa = a.position == null ? 9999 : a.position, pb = b.position == null ? 9999 : b.position;
+        return pa - pb;
+      });
+
       eventBreakdown.push({
-        eventId: ev.id, name: ev.name, discipline: ev.discipline,
+        eventId: ev.id, name: ev.name, discipline: ev.discipline, entryMode: ev.entry_mode || 'places',
         ageGroupId: ev.age_group_id, ageGroup: (ageById[ev.age_group_id] || {}).label || null,
         category: ev.category, isRelay: ev.is_relay, status: ev.status,
         customScheme: evScheme !== scheme ? evScheme : null,
-        recorded: er.length > 0, placings: placings, explain: res.explain
+        recorded: er.length > 0, tbcCount: er.filter(function (r) { return !r.house_id; }).length,
+        placings: placings, explain: res.explain
       });
     });
 
@@ -193,5 +234,5 @@
   }
 
   window.SD = window.SD || {};
-  window.SD.scoring = { compute: compute, awardEventPoints: awardEventPoints, pointsForPosition: pointsForPosition, tidy: tidy };
+  window.SD.scoring = { compute: compute, awardEventPoints: awardEventPoints, pointsForPosition: pointsForPosition, tidy: tidy, bestMark: bestMark };
 })();
