@@ -461,7 +461,8 @@
         el('div.entrant-table-wrap', null, [table]),
         el('div.row.field-actions.wrap-x', null, [
           el('button.btn.btn-primary', { text: '+ Add entrant', onclick: addEntrantToTable }),
-          el('button.btn.btn-ghost', { text: '+ Attempt column', onclick: function () { current.attemptCols++; renderField(); } })
+          el('button.btn.btn-ghost', { text: '+ Attempt column', onclick: function () { current.attemptCols++; renderField(); } }),
+          current.attemptCols > 1 ? el('button.btn.btn-ghost', { text: '− Attempt column', onclick: removeAttemptCol }) : null
         ]),
         el('h3.section-title', { text: 'Provisional leaderboard', style: { marginTop: '20px' } }),
         el('div', { id: 'field-board' })
@@ -477,6 +478,33 @@
     while (en.attempts.length < current.attemptCols) en.attempts.push('');
     current.entrants.push(en);
     if (current._tbody) current._tbody.appendChild(entrantTr(en, true));
+  }
+
+  // drop the last attempt column; only confirm if it actually holds marks, so the
+  // common case (clearing a stray 4th column back to three) is a single tap
+  function removeAttemptCol() {
+    if (current.attemptCols <= 1) return;
+    const idx = current.attemptCols - 1;
+    const hasData = current.entrants.some(function (en) {
+      const v = en.attempts[idx];
+      return v !== '' && v != null && !isNaN(Number(v));
+    });
+    function doRemove() {
+      current.attemptCols--;
+      current.entrants.forEach(function (en) {
+        const v = en.attempts[idx];
+        const wasNum = v !== '' && v != null && !isNaN(Number(v));
+        if (en.attempts.length > current.attemptCols) en.attempts = en.attempts.slice(0, current.attemptCols);
+        if (wasNum) persistEntrant(en);
+      });
+      renderField();
+    }
+    if (hasData) {
+      confirmDialog({ title: 'Remove the last attempt column?', body: 'Some entrants have a mark in this column — it will be deleted.', ok: 'Remove', danger: true })
+        .then(function (ok) { if (ok) doRemove(); });
+    } else {
+      doRemove();
+    }
   }
 
   function entrantTr(en, focus) {
