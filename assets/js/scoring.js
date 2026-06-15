@@ -75,7 +75,8 @@
     const eventBreakdown = []; // for admin: each event, its placings + points
     events.forEach(function (ev) {
       const er = resultsByEvent[ev.id] || [];
-      const res = awardEventPoints(scheme, tiePolicy, er);
+      const evScheme = (ev.points_scheme && Object.keys(ev.points_scheme).length) ? ev.points_scheme : scheme;
+      const res = awardEventPoints(evScheme, tiePolicy, er);
       Object.keys(res.points).forEach(function (id) { pointsByResult[id] = res.points[id]; });
       const placings = er.slice().sort(function (a, b) { return num(a.position) - num(b.position); })
         .map(function (r) {
@@ -90,6 +91,7 @@
         eventId: ev.id, name: ev.name, discipline: ev.discipline,
         ageGroupId: ev.age_group_id, ageGroup: (ageById[ev.age_group_id] || {}).label || null,
         category: ev.category, isRelay: ev.is_relay, status: ev.status,
+        customScheme: evScheme !== scheme ? evScheme : null,
         recorded: er.length > 0, placings: placings, explain: res.explain
       });
     });

@@ -50,6 +50,7 @@
     if (!b || !b.meet) { renderNoMeet(); return; }
     const wrap = el('div.wrap.admin', null, [
       header(b, s),
+      revealControl(b),
       winnerBanner(s),
       standingsCard(b, s),
       winnersCard(b, s),
@@ -74,6 +75,31 @@
     ]);
   }
   function statusText(st) { return st === 'live' ? 'LIVE' : st === 'finished' ? 'Finished (locked)' : 'Setup'; }
+
+  // Live big-screen visibility toggle — hide the overall standings for finale jeopardy.
+  function revealControl(b) {
+    const shown = b.meet.reveal_overall !== false;
+    return el('div.reveal-control' + (shown ? '' : '.is-hidden'), null, [
+      el('div.rc-text', null, [
+        el('strong', { text: shown ? '📺 Big screen: standings SHOWING' : '🙈 Big screen: standings HIDDEN' }),
+        el('p.muted', { text: shown
+          ? 'The crowd sees live house totals. Hide them before the final relays for a dramatic reveal.'
+          : 'The crowd sees a “grand finale” screen — totals blacked out for jeopardy. You still see everything below.' })
+      ]),
+      el('button.btn.' + (shown ? 'btn-danger' : 'btn-primary'), {
+        text: shown ? 'Hide for finale' : 'Reveal standings', onclick: function () { toggleReveal(!shown); }
+      })
+    ]);
+  }
+  async function toggleReveal(reveal) {
+    try {
+      await api.update('sportsday_meets', { reveal_overall: reveal }, { id: 'eq.' + meetId });
+      if (ctxData && ctxData.bundle && ctxData.bundle.meet) ctxData.bundle.meet.reveal_overall = reveal; // optimistic
+      render();
+      toast(reveal ? 'Standings revealed on the big screen' : 'Standings hidden on the big screen');
+      live.refresh();
+    } catch (e) { toast('Could not update: ' + (e.message || e), 'error'); }
+  }
 
   function winnerBanner(s) {
     if (!s || !s.winners.length || s.standings[0].total === 0) return el('div', { hidden: 'hidden' });
@@ -170,8 +196,13 @@
       ? 'Shared — tied places each get the full points for the higher place; the next place is skipped.'
       : 'Split — tied places share the sum of the places they occupy, divided equally (athletics standard).';
     const voids = (b.results || []).filter(function (r) { return r.voided; });
+    const overrides = (s ? s.events : []).filter(function (e) { return e.customScheme; });
+    const ovText = overrides.length
+      ? overrides.length + ' event' + (overrides.length === 1 ? '' : 's') + ' (e.g. relays score ' + schemeToStr(overrides[0].customScheme) + ')'
+      : 'none — all events use the default scheme';
     const body = el('div.stack-sm', null, [
-      el('div.detail-row', null, [el('span', { text: 'Points scheme' }), el('span', { text: schemeStr || '—' })]),
+      el('div.detail-row', null, [el('span', { text: 'Default points scheme' }), el('span', { text: schemeStr || '—' })]),
+      el('div.detail-row', null, [el('span', { text: 'Per-event overrides' }), el('span', { text: ovText })]),
       el('div.detail-row', null, [el('span', { text: 'Beyond the scheme' }), el('span', { text: 'scores 0 points' })]),
       el('div.detail-row', null, [el('span', { text: 'Tie policy' }), el('span', { text: tie })]),
       el('div.detail-row', null, [el('span', { text: 'Voided (excluded) entries' }), el('span.numeral', { text: String(voids.length) })])
@@ -187,7 +218,8 @@
       const head = el('div.row.between.ev-head', null, [
         el('div', null, [
           el('strong', { text: ev.name }),
-          el('span.muted', { text: '  ' + [ev.ageGroup, ev.category !== 'mixed' ? ev.category : '', ev.isRelay ? 'relay' : ''].filter(Boolean).join(' · ') })
+          el('span.muted', { text: '  ' + [ev.ageGroup, ev.category !== 'mixed' ? ev.category : '', ev.isRelay ? 'relay' : ''].filter(Boolean).join(' · ') }),
+          ev.customScheme ? el('span.chip.coral', { text: ' ' + schemeToStr(ev.customScheme), title: 'Custom points scheme' }) : null
         ]),
         ev.recorded
           ? el('button.btn.btn-ghost.btn-sm', { text: 'Void all', onclick: function () { voidEvent(ev); } })
@@ -229,6 +261,7 @@
   function empty(t) { return el('p.muted', { text: t }); }
   function medal(p) { return p === 1 ? '🥇 ' : p === 2 ? '🥈 ' : p === 3 ? '🥉 ' : ''; }
   function ordinal(n) { const s = ['th', 'st', 'nd', 'rd'], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); }
+  function schemeToStr(sc) { return Object.keys(sc || {}).map(Number).sort(function (a, b) { return a - b; }).map(function (p) { return sc[String(p)]; }).join('/'); }
 
   window.SD = window.SD || {};
   window.SD.admin = { mount: mount, unmount: unmount };

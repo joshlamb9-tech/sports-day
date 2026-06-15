@@ -403,6 +403,21 @@ h3 { font-size: 1.15rem; font-weight: 700; }
 .vdot.on { background: var(--primary); }
 .spec-foot { display: flex; justify-content: space-between; align-items: center; margin-top: var(--s5); }
 
+/* Admin: live big-screen reveal control */
+.reveal-control { display: flex; justify-content: space-between; align-items: center; gap: var(--s4); padding: var(--s4); margin-top: var(--s4); border-radius: var(--r-lg); border: 1px solid var(--line); background: var(--sky-tint); }
+.reveal-control.is-hidden { background: #fff4e0; border-color: #e8c889; }
+.reveal-control .rc-text strong { font-size: 1.05rem; }
+.reveal-control .rc-text p { margin-top: 2px; }
+
+/* Spectator: hidden "grand finale" board (admin has blacked out the standings) */
+.hidden-board { text-align: center; padding: 6vh var(--s4) 4vh; }
+.hb-emoji { font-size: clamp(3rem, 12vh, 7rem); line-height: 1; }
+.hb-title { font-size: clamp(2rem, 7vh, 4rem); margin-top: var(--s3); }
+.hb-sub { font-size: clamp(1rem, 2.6vh, 1.5rem); color: var(--ink-soft); max-width: 42ch; margin: var(--s3) auto 0; }
+.hb-houses { display: flex; flex-wrap: wrap; gap: var(--s3); justify-content: center; margin-top: var(--s6); }
+.hb-house { display: flex; align-items: center; gap: var(--s2); padding: var(--s2) var(--s4); border-radius: var(--pill); border: 2px solid var(--house, var(--line)); font-weight: 800; font-size: clamp(1rem, 2.4vh, 1.5rem); }
+.hb-swatch { width: 18px; height: 18px; border-radius: 6px; }
+
 /* ---- Print event sheet (paper fallback) ---- */
 #print-area { display: none; }
 .print-head h1 { font-size: 1.8rem; }

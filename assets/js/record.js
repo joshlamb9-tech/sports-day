@@ -212,7 +212,8 @@
   }
   function orderPreview(positions) {
     if (!current.order.length) return el('p.muted.preview-empty', { text: 'No places yet.' });
-    const scheme = bundle.meet.points_scheme, tie = bundle.meet.tie_policy;
+    const scheme = (current.event.points_scheme && Object.keys(current.event.points_scheme).length) ? current.event.points_scheme : bundle.meet.points_scheme;
+    const tie = bundle.meet.tie_policy;
     // build pseudo results to award points
     const pseudo = current.order.map(function (o, i) { return { id: i, position: posOf(current.order, i), house_id: o.house_id }; });
     const award = scoring.awardEventPoints(scheme, tie, pseudo);

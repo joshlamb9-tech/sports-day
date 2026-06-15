@@ -82,10 +82,11 @@
     const b = data && data.bundle, s = data && data.scores;
     clear(container);
     if (!b || !b.meet) { renderNoMeet(); return; }
+    const hidden = b.meet.reveal_overall === false;   // Admin has blacked out the standings
     const view = currentRows();
 
-    // confetti when the overall leader changes
-    if (views[viewIdx] === 'overall' && s && s.winners.length === 1 && s.standings[0].total > 0) {
+    // confetti when the overall leader changes (only while standings are visible)
+    if (!hidden && views[viewIdx] === 'overall' && s && s.winners.length === 1 && s.standings[0].total > 0) {
       const leader = s.winners[0].houseId;
       if (lastLeader && lastLeader !== leader && window.confetti) {
         try { confetti({ particleCount: 140, spread: 100, origin: { y: 0.4 }, disableForReducedMotion: true }); } catch (e) {}
@@ -97,11 +98,11 @@
       el('div.spec-head', null, [
         el('div', null, [
           el('p.eyebrow', { text: b.meet.name }),
-          el('h1.spec-title', { text: view.title === 'Overall' ? 'House Standings' : view.title })
+          el('h1.spec-title', { text: hidden ? 'The Grand Finale' : (view.title === 'Overall' ? 'House Standings' : view.title) })
         ]),
-        viewDots()
+        hidden ? el('span') : viewDots()
       ]),
-      board(view.rows),
+      hidden ? hiddenBoard(b) : board(view.rows),
       footer(b)
     ]);
     container.appendChild(wrap);
@@ -123,6 +124,23 @@
       ]));
     });
     return board;
+  }
+
+  // Admin has hidden the standings for jeopardy before the finale.
+  function hiddenBoard(b) {
+    const chips = el('div.hb-houses');
+    (b.houses || []).forEach(function (h) {
+      chips.appendChild(el('div.hb-house', { style: { '--house': h.colour } }, [
+        el('span.hb-swatch', { style: { background: h.colour } }),
+        el('span', { text: h.name })
+      ]));
+    });
+    return el('div.hidden-board', null, [
+      el('div.hb-emoji', { text: '🤫' }),
+      el('h2.hb-title', { text: 'Standings under wraps' }),
+      el('p.hb-sub', { text: 'Big points still up for grabs — the final results decide it. Stand by for the reveal…' }),
+      chips
+    ]);
   }
 
   function viewDots() {
