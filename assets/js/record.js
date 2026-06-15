@@ -16,15 +16,16 @@
 
   let container = null, bundle = null, meetId = null;
   let current = null;          // { event, order:[{house_id, tie}], names:{house_id:name} }
+  let family = null;           // the open event-family { key, name, category, discipline, rows:[event,...] }
   let queueOff = null;
-  let groupMode = 'age';       // 'age' = by year band, 'type' = by track/field/relay/fun
+  let groupMode = 'type';      // list grouping: 'type' = track/field/relay/fun, 'all' = flat A–Z
 
   const RECENT_KEY = function (m) { return 'sd_recent_' + m; };
 
   async function mount(node, ctx) {
     container = node;
     meetId = store.meetId();
-    try { groupMode = localStorage.getItem('sd_group_mode') || 'age'; } catch (e) {}
+    try { groupMode = localStorage.getItem('sd_group_mode') || 'type'; } catch (e) {}
     if (!meetId) { renderNoMeet(); return; }
     bundle = await store.loadBundle(meetId);
     if (!bundle || !bundle.meet) { renderNoMeet(); return; }
@@ -73,6 +74,7 @@
   /* ---------- event picker ---------- */
   function renderPicker() {
     current = null;
+    family = null;
     clear(container);
     const wrap = el('div.wrap.record', null, [
       el('div.row.between.rec-head', null, [
@@ -86,13 +88,13 @@
     const search = el('input.input.search', { placeholder: 'Search events…', oninput: function (e) { filterCards(e.target.value); } });
     wrap.appendChild(el('div.picker-controls', null, [groupToggle(), search]));
 
-    const groups = groupMode === 'type' ? groupEventsByType() : groupEventsByAge();
+    const groups = groupFamilies();
     const board = el('div.event-groups');
     groups.forEach(function (g) {
       const sec = el('div.event-group');
       if (g.label) sec.appendChild(el('h3.group-title', { text: g.label }));
       const grid = el('div.event-grid');
-      g.events.forEach(function (ev) { grid.appendChild(eventCard(ev)); });
+      g.families.forEach(function (fam) { grid.appendChild(familyCard(fam)); });
       sec.appendChild(grid);
       board.appendChild(sec);
     });
@@ -115,30 +117,53 @@
     return el('div.banner.offline', { style: { marginTop: '12px' } }, [el('span', { text: msg })]);
   }
 
-  function groupEventsByAge() {
-    const byId = {}; bundle.ageGroups.forEach(function (a) { byId[a.id] = a; });
-    const order = bundle.ageGroups.slice().sort(function (a, b) { return a.sort - b.sort; });
-    const groups = [];
-    order.forEach(function (a) {
-      const evs = bundle.events.filter(function (e) { return e.age_group_id === a.id; });
-      if (evs.length) groups.push({ label: a.label, events: evs });
+  // An event "family" is the same event across age groups, e.g. Long Jump for
+  // Junior / Inter / Senior. One teacher owns the whole family: they open it once
+  // and flip between age groups inside, rather than hopping in and out per cohort.
+  function familyKey(ev) {
+    return [(ev.name || '').trim().toLowerCase(), ev.category || 'mixed', ev.discipline || 'track', ev.entry_mode || 'places'].join('|');
+  }
+  function ageSortVal(id) { const a = bundle.ageGroups.filter(function (x) { return x.id === id; })[0]; return a ? a.sort : 999; }
+
+  function buildFamilies() {
+    const map = {}; const orderKeys = [];
+    bundle.events.forEach(function (ev) {
+      const key = familyKey(ev);
+      if (!map[key]) {
+        map[key] = { key: key, name: ev.name || '(unnamed)', category: ev.category, discipline: ev.discipline || 'track', entry_mode: ev.entry_mode || 'places', rows: [] };
+        orderKeys.push(key);
+      }
+      map[key].rows.push(ev);
     });
-    const none = bundle.events.filter(function (e) { return !e.age_group_id; });
-    if (none.length) groups.push({ label: order.length ? 'Other' : null, events: none });
-    return groups;
+    orderKeys.forEach(function (k) { map[k].rows.sort(function (a, b) { return ageSortVal(a.age_group_id) - ageSortVal(b.age_group_id); }); });
+    return orderKeys.map(function (k) { return map[k]; });
   }
 
-  function groupEventsByType() {
+  function groupFamilies() {
+    const fams = buildFamilies();
+    if (groupMode === 'all') {
+      const sorted = fams.slice().sort(function (a, b) { return a.name.localeCompare(b.name); });
+      return [{ label: null, families: sorted }];
+    }
     const order = [['track', 'Track'], ['field', 'Field'], ['relay', 'Relay'], ['other', 'Fun & novelty']];
     const known = order.map(function (p) { return p[0]; });
-    const groups = [];
+    const out = [];
     order.forEach(function (pair) {
-      const evs = bundle.events.filter(function (e) { return (e.discipline || 'track') === pair[0]; });
-      if (evs.length) groups.push({ label: pair[1], events: evs });
+      const fs = fams.filter(function (f) { return (f.discipline || 'track') === pair[0]; });
+      if (fs.length) out.push({ label: pair[1], families: fs });
     });
-    const rest = bundle.events.filter(function (e) { return known.indexOf(e.discipline || 'track') === -1; });
-    if (rest.length) groups.push({ label: 'Other', events: rest });
-    return groups;
+    const rest = fams.filter(function (f) { return known.indexOf(f.discipline || 'track') === -1; });
+    if (rest.length) out.push({ label: 'Other', families: rest });
+    return out;
+  }
+
+  // has anything been recorded for one age-group row?
+  function familyRowDone(ev) {
+    const isMarks = (ev.entry_mode || 'places') === 'marks';
+    const isTrackEv = !isMarks && (ev.discipline || 'track') === 'track';
+    const rs = (bundle.results || []).filter(function (r) { return r.event_id === ev.id && !r.voided; });
+    if (isMarks || isTrackEv) return rs.length > 0;
+    return ev.status === 'done';
   }
 
   function groupToggle() {
@@ -153,31 +178,56 @@
         }
       });
     }
-    return el('div.seg', null, [btn('age', 'By year group'), btn('type', 'By type')]);
+    return el('div.seg', null, [btn('type', 'By type'), btn('all', 'All A–Z')]);
   }
 
-  function eventCard(ev) {
-    const isMarks = (ev.entry_mode || 'places') === 'marks';
-    const isTrackEv = !isMarks && (ev.discipline || 'track') === 'track';
-    const rs = (bundle.results || []).filter(function (r) { return r.event_id === ev.id && !r.voided; });
-    const count = rs.length;
-    const heatsRec = isTrackEv ? Object.keys(rs.reduce(function (m, r) { m[r.heat || 'A'] = 1; return m; }, {})).length : 0;
-    const done = !isMarks && !isTrackEv && ev.status === 'done';
-    const cat = ev.category && ev.category !== 'mixed' ? ev.category : '';
-    let statusChip = null;
-    if (isMarks) statusChip = count ? el('span.chip.done-chip', { text: '👤 ' + count }) : el('span.chip', { text: 'measured' });
-    else if (isTrackEv) statusChip = heatsRec ? el('span.chip.done-chip', { text: '🏁 ' + heatsRec + ' heat' + (heatsRec > 1 ? 's' : '') }) : null;
-    else statusChip = done ? el('span.chip.done-chip', { text: '✓ recorded' }) : null;
-    return el('button.event-card' + (done ? '.done' : ''), { onclick: function () { openRecord(ev); } }, [
-      el('span.ev-disc', { text: disciplineIcon(ev.discipline) }),
-      el('span.ev-name', { text: ev.name || '(unnamed)' }),
-      el('div.row.wrap-x', { style: { gap: '6px' } }, [
-        groupMode === 'type' && ev.age_group_id ? el('span.chip', { text: ageLabel(ev.age_group_id) }) : null,
-        cat ? el('span.chip', { text: cat }) : null,
-        statusChip
-      ])
+  function familyCard(fam) {
+    const cat = fam.category && fam.category !== 'mixed' ? fam.category : '';
+    let ages;
+    const ageRows = fam.rows.filter(function (ev) { return ev.age_group_id; });
+    if (ageRows.length) {
+      ages = el('div.row.wrap-x', { style: { gap: '6px' } }, ageRows.map(function (ev) {
+        const done = familyRowDone(ev);
+        return el('span.chip' + (done ? '.done-chip' : ''), { text: (done ? '✓ ' : '') + ageLabel(ev.age_group_id) });
+      }));
+    } else {
+      const done = familyRowDone(fam.rows[0]);
+      ages = done ? el('div.row.wrap-x', { style: { gap: '6px' } }, [el('span.chip.done-chip', { text: '✓ recorded' })]) : null;
+    }
+    return el('button.event-card', { onclick: function () { openFamily(fam); } }, [
+      el('span.ev-disc', { text: disciplineIcon(fam.discipline) }),
+      el('span.ev-name', { text: fam.name }),
+      cat ? el('div.row.wrap-x', { style: { gap: '6px' } }, [el('span.chip', { text: cat })]) : null,
+      ages
     ]);
   }
+
+  function openFamily(fam) {
+    family = fam;
+    const undone = fam.rows.filter(function (ev) { return !familyRowDone(ev); });
+    const ev = undone[0] || fam.rows[0];
+    if ((ev.entry_mode || 'places') === 'marks') openField(ev); else openRecord(ev);
+  }
+
+  // the age-group toggle shown INSIDE an open event — flip cohort without leaving
+  function familyAgeBar() {
+    if (!family || family.rows.length <= 1) return null;
+    const bar = el('div.heat-bar.age-bar');
+    family.rows.forEach(function (ev) {
+      const active = current && current.event && current.event.id === ev.id;
+      bar.appendChild(el('button.heat-pill' + (active ? '.active' : ''), { onclick: function () { switchFamilyEvent(ev); } },
+        [el('span', { text: ageLabel(ev.age_group_id) || 'All ages' }), familyRowDone(ev) ? el('span.heat-tick', { text: ' ✓' }) : null]));
+    });
+    return el('div.age-switch', null, [el('span.eyebrow', { text: 'Age group' }), bar]);
+  }
+
+  function switchFamilyEvent(ev) {
+    if (current && current.event && current.event.id === ev.id) return;
+    // field entrants persist on every change; track heats need an explicit flush
+    if (current && current.mode !== 'marks' && current.dirty && current.order.length) persistHeat();
+    if ((ev.entry_mode || 'places') === 'marks') openField(ev); else openRecord(ev);
+  }
+
   function disciplineIcon(d) { return ({ track: '🏃', field: '🎯', relay: '🤝', other: '•' })[d] || '•'; }
 
   function filterCards(q) {
@@ -230,6 +280,7 @@
           el('h2', { text: ev.name }),
           el('p.muted', { text: [ageLabel(ev.age_group_id), ev.category !== 'mixed' ? ev.category : '', ev.is_relay ? 'relay' : ''].filter(Boolean).join(' · ') })
         ]),
+        familyAgeBar(),
         track ? heatBar() : null,
         el('p.help', { text: track ? ('Heat ' + current.heat + ' — tap houses in finishing order (a house can place more than once). Save each heat; points are summed across heats.') : 'Tap houses in finishing order. Remove a place with ✕ in the list below.' }),
         houseTiles(positions),
@@ -405,6 +456,7 @@
           el('h2', { text: ev.name }),
           el('p.muted', { text: [ageLabel(ev.age_group_id), ev.category !== 'mixed' ? ev.category : '', 'measured — best counts'].filter(Boolean).join(' · ') })
         ]),
+        familyAgeBar(),
         el('p.help', { text: 'Add each child as they compete; type each attempt along their row (best counts). House can be TBC for now. The leaderboard ranks automatically.' }),
         el('div.entrant-table-wrap', null, [table]),
         el('div.row.field-actions.wrap-x', null, [
